@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:14.10-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: hackme
+      POSTGRES_MULTIPLE_DATABASES: db1,db2
+    volumes:
+      - ./.data/postgres:/var/lib/postgresql/data
+      - ./seed-multiple-db.sh:/docker-entrypoint-initdb.d/seed-multiple-db.sh
+    command: postgres -c wal_level=logical -p 5432
+    network_mode: host
+
+  db2:
+    image: postgres:14.10-alpine
+    container_name: postgres2
+    environment:
+      POSTGRES_PASSWORD: hackme
+      POSTGRES_MULTIPLE_DATABASES: db1,db2
+    volumes:
+      - ./.data/postgres2:/var/lib/postgresql/data
+      - ./seed-multiple-db.sh:/docker-entrypoint-initdb.d/seed-multiple-db.sh
+    command: postgres -c wal_level=logical -p 5433
+    network_mode: host

@@ -1,0 +1,6 @@
+local:
+  database: postgres
+  host: localhost
+  password: hackme
+  port: 5432
+  role: postgres
