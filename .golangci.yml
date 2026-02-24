@@ -1,0 +1,100 @@
+run:
+  concurrency: 4
+  issues-exit-code: 1
+  tests: true
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  enable-all: false
+  disable-all: false
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - forcetypeassert
+    - gci
+    - gochecknoglobals
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - gofumpt
+    - goimports
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - importas
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
+
+linters-settings:
+  gocyclo:
+    min-complexity: 35
+
+  revive:
+    rules:
+      - name: exported
+        disabled: true
+
+  sloglint:
+    # Enforce using methods that accept a context.
+    # https://github.com/go-simpler/sloglint?tab=readme-ov-file#context-only
+    context: "all"
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 1024
+  max-same-issues: 1024
+
+  exclude-rules:
+    - text: "SA1029"
+      linters:
+        - staticcheck
+
+    # Exclude some linters from running on test files
+    - path: _test\.go
+      linters:
+        # bodyclose reports some false-positives when using a test request recorder
+        - bodyclose
+        # It's overkill to use `NewRequestWithContext` in tests
+        - noctx
+        - goerr113
+        - sloglint
+
+    - text: "// Code generated"
+      linters:
+        - all
