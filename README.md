@@ -2,30 +2,26 @@
 
 `pgctl` is a CLI tool that helps Engineers perform PostgreSQL maintenance operations safely and efficiently.
 
-## Features
-
 - Execute common maintenance operations on PostgreSQL databases
 - Support for multiple database configurations
 - Safe execution with dry-run capabilities
 - Multiple configuration file formats (YAML, JSON, TOML)
 
-## Installation
+## Install
 
 ### Prerequisites
 
-- Go 1.23 or higher
-- Make
+Your environment must have installed:
+- [Go 1.23 or higher](https://go.dev/doc/install)
+- [Make](https://www.gnu.org/software/make/)
 - pgdump (See [INSTALLATION.md](./INSTALLATION.md))
 
-### Building from source
-
-To build the project:
+### Build from source
 
 ```sh
 make build
 ```
-
-This will create a `pgctl` binary within the `/bin` directory.
+This builds the project, creating a `pgctl` binary within the `/bin` directory.
 
 ## Configuration
 
@@ -54,7 +50,7 @@ second-cool-alias:
   password: hackme2
 ```
 
-To initialize this configuration file, use:
+To initialize this configuration in interactive mode, use:
 
 ```sh
 ./pgctl config init
@@ -64,108 +60,90 @@ To initialize this configuration file, use:
 
 ## Usage
 
-View available commands:
-```sh
-./pgctl
-```
+Most commands read as natural english language orders.
 
-### Examples
+*Common flags:*
+
+| Flag      | Meaning                                                                 |
+| :-------- | ----------------------------------------------------------------------- |
+| `--help`  | get details about the command                                           |
+| `--on`    | alias selected                                                          |
+| `--from`  | to select alias from, sometimes used in case of 2 alias needed          |
+| `--to`    | to select alias toward which command should run, used in case of `copy` |
+| `--apply` | remove dry-run mode (safety feature: dry run is the default)            |
+
+*Commands*
 
 ```sh
-pgctl ping
-pgctl update extensions --on cool-alias --all-databases
+# Configuration
+./pgctl ping
+./pgctl config init
+./pgctl config show
+
+# Basics
+./pgctl list tables
+./pgctl list databases
+
+# Extensions management
+./pgctl list extensions
+./pgctl update extensions--all-databases
+
+# Sequences management
+./pgctl list sequences
+./pgctl copy sequences --from alias --to alias2
+
+# Pub-Sub
+./pgctl list publications
+./pgctl list subscriptions
+./pgctl create publication --all-tables
+./pgctl create publication --tables table1,table2
+./pgctl create subscription --on alias2 --from alias --publication pubname
+./pgctl drop publication --name pubname
+./pgctl drop subscription --name subname
+
+# Schema
+./pgctl copy schema --from alias --to alias2 --all-tables #selecting specific tables not supported yet
+
+# Relocation
+./pgctl init relocation --from alias --to alias2 --no-ddl-confirmed
+./pgctl run relocation --from alias --to alias2 --no-ddl-confirmed --no-writes-confirmed
+
+# Checks
+./pgctl check database-is-empty
+./pgctl check have-similar-sequences
+./pgctl check subscription-lag
+./pgctl check tables-have-proper-replica-identity #used for logical replication
+./pgctl check user-has-replication-grants
+./pgctl check wal-level-is-logical
 ```
+### Relocation
+
+Relocation commands runs checks, creations and copy needed to move a database from one alias to another.
+* The target database must exist.
+* This does not copy users.
+* It supports major upgrades (ex: from PG14 to PG18)
+
+It reduces the task list to move all tables from db1 to db2 to:
+1. configure pgctl with db1 and db2 alias (must be owner of the databases)
+2. `pgctl init relocation`
+3. wait and monitor
+4. cut connection between your application(s)
+5. `pgctl run relocation`
+6. update connections strings and reconnect your application(s)
+
+> ![!WARNING]
+> This does not yet support other schemas than public.
+
 
 ## Safety Features
 
 - Any changes are set to be dry runs by default, which can be then run for real with `--apply` flag
-
-## Testing
-
-This project includes comprehensive testing to ensure reliability and correctness.
-
-### Quick Testing
-
-```sh
-# Run unit tests only
-make test
-
-# Run integration tests only
-make test-integration
-```
-
-### Unit Tests
-
-Unit tests cover individual functions and components:
-
-```sh
-# Run unit tests with coverage
-make test
-
-# Run specific package
-go test ./pkg/cli/...
-
-# Run with verbose output
-go test -v ./pkg/...
-```
-
-### Integration Tests
-
-Integration tests provide end-to-end testing with real PostgreSQL containers and actual pgctl binary execution.
-
-#### Prerequisites
-
-- **Docker**: Required for PostgreSQL containers via TestContainers
-- **Go 1.23+**: For coverage instrumentation from binary execution
-
-#### Running Integration Tests
-
-```sh
-# Run all integration tests with enhanced coverage collection
-make test-integration
-
-# Run specific command tests
-go test -v ./test/integration/ping_test.go ./test/integration/testutils.go ./test/integration/main_test.go
-
-# Run specific test function
-go test -v ./test/integration/... -run TestPingCommand
-```
-
-#### Coverage Reports
-
-Integration tests generate comprehensive coverage reports from actual binary execution:
-
-```sh
-# View coverage percentage
-go tool cover -func=coverage/coverage-integrations-tests.out | tail -1
-
-# Open HTML coverage report
-open coverage/coverage-integrations-tests.html
-
-# Clean coverage data
-make test-integration-clean
-```
-
-#### Test Coverage
-
-The integration test suite covers:
-
-- ✅ **Implemented commands**: `ping`, `list extensions`, `update extensions` (with real database operations)
-- 🔧 **CLI structure testing**: All commands include help, validation, and error handling tests
-- 🔧 **Infrastructure**: PostgreSQL containers, configuration management, binary execution
-- 📊 **Coverage**: We aim for >80% coverage
-
-#### Test Organization
-
-- **Individual test files per command**: `ping_test.go`, `config_test.go`, `update_test.go`, etc.
-- **Real PostgreSQL containers**: Using TestContainers for authentic database operations
-- **Binary instrumentation**: Coverage collection from actual pgctl binary execution
-- **Comprehensive scenarios**: Help, validation, success, failure, and edge cases
-
-For detailed integration test documentation, patterns, and contribution guidelines, see:
-
-**📖 [Integration Test Documentation](./test/integration/README.md)**
+- Checks are automated for some commands that have requirements
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+## License
+
+MIT
