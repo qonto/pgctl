@@ -131,7 +131,7 @@ It reduces the task list to move all tables from db1 to db2 to:
 5. `pgctl run relocation`
 6. update connections strings and reconnect your application(s)
 
-> ![!WARNING]
+> [!WARNING]
 > This does not yet support other schemas than public.
 
 
