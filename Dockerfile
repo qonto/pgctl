@@ -1,4 +1,4 @@
-FROM golang:1.27-alpine3.23 AS builder
+FROM golang:1.27-alpine3.24 AS builder
 
 WORKDIR /build
 
@@ -13,7 +13,7 @@ HEALTHCHECK NONE
 RUN make build-alpine
 
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 ARG USER=app
 ARG HOME=/app
