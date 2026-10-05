@@ -2,11 +2,11 @@ GIT_SHA=$(shell git rev-parse HEAD)
 GIT_CLOSEST_TAG=$(shell git describe --always --abbrev=0 --tags)
 DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-STATIC_LINKING=-linkmode external -extldflags '-static' -s -w
+STATIC_LINKING=-extldflags '-static' -s -w
 MUSL=$(shell if which apk > /dev/null; then echo "musl"; fi)
 
 BINARY_TARGET_PATH=bin/pgctl
-BUILD_INFO="-X metadata.Version=$(GIT_CLOSEST_TAG) -X metadata.SHA=$(GIT_SHA) -X metadata.Date=$(Date)"
+BUILD_INFO=-X metadata.Version=$(GIT_CLOSEST_TAG) -X metadata.SHA=$(GIT_SHA) -X metadata.Date=$(Date)
 BUILD_CMD=CGO_ENABLED=1 go build -ldflags "$(BUILD_INFO)"
 BUILD_ALPINE_CMD=CGO_ENABLED=1 go build -tags musl -ldflags "$(STATIC_LINKING) $(BUILD_INFO)"
 
