@@ -12,7 +12,7 @@
 ### Prerequisites
 
 Your environment must have installed:
-- [Go 1.23 or higher](https://go.dev/doc/install)
+- [Go 1.27 or higher](https://go.dev/doc/install)
 - [Make](https://www.gnu.org/software/make/)
 - pgdump (See [INSTALLATION.md](./INSTALLATION.md))
 
@@ -92,6 +92,11 @@ Most commands read as natural english language orders.
 ./pgctl list sequences
 ./pgctl copy sequences --from alias --to alias2
 
+# Grants and clients management
+./pgctl grant connect
+./gctl revoke connect
+./gctl drop clients
+
 # Pub-Sub
 ./pgctl list publications
 ./pgctl list subscriptions
@@ -115,6 +120,7 @@ Most commands read as natural english language orders.
 ./pgctl check tables-have-proper-replica-identity #used for logical replication
 ./pgctl check user-has-replication-grants
 ./pgctl check wal-level-is-logical
+./pgctl check subscription-is-ready --on alias
 ```
 ### Relocation
 
