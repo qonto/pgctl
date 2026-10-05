@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -44,6 +44,8 @@ invalid_db:
 
 	// Secure file permissions for config files (0600)
 	SecureFilePerms = 0o600
+
+	SSLModeForTests = "disable"
 )
 
 // PostgreSQLContainer represents a test PostgreSQL container
@@ -70,6 +72,17 @@ func (c *PostgreSQLConfig) ConnectionString() string {
 		c.User, c.Password, c.Host, c.Port, c.Database, c.SSLMode)
 }
 
+func getBasicConfig(host string, port int) PostgreSQLConfig {
+	return PostgreSQLConfig{
+		Host:     host,
+		Port:     port,
+		Database: "testdb",
+		User:     "testuser",
+		Password: "testpass",
+		SSLMode:  SSLModeForTests,
+	}
+}
+
 // DSN returns a data source name for database/sql
 func (c *PostgreSQLConfig) DSN() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -89,7 +102,7 @@ func SetupPostgreSQLContainer(ctx context.Context, t *testing.T) *PostgreSQLCont
 
 	// Create PostgreSQL container
 	postgresContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18.4-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
@@ -107,14 +120,7 @@ func SetupPostgreSQLContainer(ctx context.Context, t *testing.T) *PostgreSQLCont
 	port, err := postgresContainer.MappedPort(ctx, "5432")
 	require.NoError(t, err, "Failed to get container port")
 
-	config := PostgreSQLConfig{
-		Host:     host,
-		Port:     port.Int(),
-		Database: "testdb",
-		User:     "testuser",
-		Password: "testpass",
-		SSLMode:  "disable",
-	}
+	config := getBasicConfig(host, int(port.Num()))
 
 	return &PostgreSQLContainer{
 		Container: postgresContainer,
@@ -128,7 +134,7 @@ func SetupPostgreSQLContainerWithWalLevel(ctx context.Context, t *testing.T, wal
 
 	// Create PostgreSQL container
 	postgresContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18.4-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
@@ -149,14 +155,7 @@ func SetupPostgreSQLContainerWithWalLevel(ctx context.Context, t *testing.T, wal
 	port, err := postgresContainer.MappedPort(ctx, "5432")
 	require.NoError(t, err, "Failed to get container port")
 
-	config := PostgreSQLConfig{
-		Host:     host,
-		Port:     port.Int(),
-		Database: "testdb",
-		User:     "testuser",
-		Password: "testpass",
-		SSLMode:  "disable",
-	}
+	config := getBasicConfig(host, int(port.Num()))
 
 	return &PostgreSQLContainer{
 		Container: postgresContainer,
@@ -175,7 +174,7 @@ func SetupPublisherSubscriberContainers(ctx context.Context, t *testing.T) (*Pos
 
 	// Create publisher container (source)
 	publisherContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18.4-alpine",
 		postgres.WithDatabase("publisher_db"),
 		postgres.WithUsername("publisher_user"),
 		postgres.WithPassword("publisher_pass"),
@@ -192,7 +191,7 @@ func SetupPublisherSubscriberContainers(ctx context.Context, t *testing.T) (*Pos
 
 	// Create subscriber container (target)
 	subscriberContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18.4-alpine",
 		postgres.WithDatabase("subscriber_db"),
 		postgres.WithUsername("subscriber_user"),
 		postgres.WithPassword("subscriber_pass"),
@@ -220,11 +219,11 @@ func SetupPublisherSubscriberContainers(ctx context.Context, t *testing.T) (*Pos
 
 	publisherConfig := PostgreSQLConfig{
 		Host:     pubHost,
-		Port:     pubPort.Int(),
+		Port:     int(pubPort.Num()),
 		Database: "publisher_db",
 		User:     "publisher_user",
 		Password: "publisher_pass",
-		SSLMode:  "disable",
+		SSLMode:  SSLModeForTests,
 	}
 
 	// Get subscriber connection details
@@ -236,11 +235,11 @@ func SetupPublisherSubscriberContainers(ctx context.Context, t *testing.T) (*Pos
 
 	subscriberConfig := PostgreSQLConfig{
 		Host:     subHost,
-		Port:     subPort.Int(),
+		Port:     int(subPort.Num()),
 		Database: "subscriber_db",
 		User:     "subscriber_user",
 		Password: "subscriber_pass",
-		SSLMode:  "disable",
+		SSLMode:  SSLModeForTests,
 	}
 
 	publisher := &PostgreSQLContainer{
@@ -380,44 +379,44 @@ func (p *PostgreSQLContainer) InsertTestData(ctx context.Context, t *testing.T) 
 func (p *PostgreSQLContainer) CreateTestExtensions(ctx context.Context, t *testing.T) {
 	t.Helper()
 
-	type Extension struct {
-		Name    string
-		Version string
+	// Install a fixed pair that covers both upgrade branches of `pgctl update
+	// extensions`:
+	//   - btree_gist @ 1.6 → 1.8 : minor-only bump (1.x line).
+	//   - pgctl_bump  @ 1.0 → 2.0 : synthetic major bump shipped from
+	//     test/integration/testdata/pgctl_bump so the `--include-major-versions`
+	//     code path can be exercised on any PostgreSQL version, independently
+	//     of contrib extensions coming and going across releases.
+	p.ExecuteSQL(ctx, t, "CREATE EXTENSION btree_gist WITH VERSION '1.6'")
+	t.Logf("Installed extension: btree_gist with version 1.6")
+	p.InstallPgctlBumpExtension(ctx, t)
+}
+
+// InstallPgctlBumpExtension copies the pgctl_bump test extension into the
+// container's PostgreSQL extension directory and installs it at version 1.0.
+// pgctl_bump ships four tiny files under test/integration/testdata/pgctl_bump/
+// and exposes a synthetic 1.0 → 2.0 major-version upgrade path so pgctl tests
+// can exercise the `--include-major-versions` code branch on any PostgreSQL
+// version, without depending on adminpack (which was removed in PG 17).
+func (p *PostgreSQLContainer) InstallPgctlBumpExtension(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	const extensionDir = "/usr/local/share/postgresql/extension/"
+	files := []string{
+		"pgctl_bump.control",
+		"pgctl_bump--1.0.sql",
+		"pgctl_bump--2.0.sql",
+		"pgctl_bump--1.0--2.0.sql",
 	}
 
-	// Install some common extensions that are typically available
-	extensions := []Extension{
-		{
-			Name:    "adminpack",
-			Version: "1.1",
-		},
-		{
-			Name:    "pg_trgm",
-			Version: "1.5",
-		},
+	projectRoot := getProjectRoot(t)
+	for _, f := range files {
+		hostPath := filepath.Join(projectRoot, "test", "integration", "testdata", "pgctl_bump", f)
+		err := p.Container.CopyFileToContainer(ctx, hostPath, extensionDir+f, 0o644)
+		require.NoError(t, err, "failed to copy %s into container extension dir", f)
 	}
 
-	for _, extension := range extensions {
-		// First check if extension is available
-		checkSQL := `
-			SELECT COUNT(*) FROM pg_available_extensions
-			WHERE name = $1 AND installed_version IS NULL;
-		`
-
-		pool := p.CreatePgxPool(ctx, t)
-		defer pool.Close()
-
-		var count int
-		err := pool.QueryRow(ctx, checkSQL, extension.Name).Scan(&count)
-		require.NoError(t, err)
-
-		// Only install if extension is available and not already installed
-		if count > 0 {
-			installSQL := fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS \"%s\" WITH VERSION '%s';", extension.Name, extension.Version)
-			p.ExecuteSQL(ctx, t, installSQL)
-			t.Logf("Installed extension: %s with version %s", extension.Name, extension.Version)
-		}
-	}
+	p.ExecuteSQL(ctx, t, "CREATE EXTENSION pgctl_bump WITH VERSION '1.0'")
+	t.Logf("Installed extension: pgctl_bump with version 1.0 (available up to 2.0)")
 }
 
 // CreateExtensionWithOldVersion creates an extension and simulates it having an older version
@@ -819,14 +818,7 @@ func SetupPostgreSQLContainerWithVersion(ctx context.Context, t *testing.T, imag
 	port, err := postgresContainer.MappedPort(ctx, "5432")
 	require.NoError(t, err, "Failed to get container port")
 
-	config := PostgreSQLConfig{
-		Host:     host,
-		Port:     port.Int(),
-		Database: "testdb",
-		User:     "testuser",
-		Password: "testpass",
-		SSLMode:  "disable",
-	}
+	config := getBasicConfig(host, int(port.Num()))
 
 	return &PostgreSQLContainer{
 		Container: postgresContainer,

@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+const ValueRequiredErrMessage = "value is required"
+
 func TestIsNotEmpty(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -20,25 +22,25 @@ func TestIsNotEmpty(t *testing.T) {
 			name:    "Empty string",
 			value:   "",
 			wantErr: true,
-			errMsg:  "value is required",
+			errMsg:  ValueRequiredErrMessage,
 		},
 		{
 			name:    "Whitespace only",
 			value:   "   ",
 			wantErr: true,
-			errMsg:  "value is required",
+			errMsg:  ValueRequiredErrMessage,
 		},
 		{
 			name:    "Tab character",
 			value:   "\t",
 			wantErr: true,
-			errMsg:  "value is required",
+			errMsg:  ValueRequiredErrMessage,
 		},
 		{
 			name:    "Newline character",
 			value:   "\n",
 			wantErr: true,
-			errMsg:  "value is required",
+			errMsg:  ValueRequiredErrMessage,
 		},
 	}
 

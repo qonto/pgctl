@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 )
 
 func (a *App) CheckRolesBetweenSourceAndTarget(sourceAlias string, targetAlias string) {
@@ -37,4 +38,26 @@ func (a *App) CheckRolesBetweenSourceAndTarget(sourceAlias string, targetAlias s
 	} else {
 		fmt.Printf("✅ All roles of the source instance %s exist on the target instance %s\n", sourceAlias, targetAlias)
 	}
+}
+
+func (a *App) DropClients(alias, excludeRoles string, apply bool) {
+	var excludeRoleList []string
+	if excludeRoles != "" {
+		excludeRoleList = strings.Split(excludeRoles, ",")
+	}
+
+	db := a.getDatabaseFromAlias(alias)
+	if !apply {
+		fmt.Println("🚧 DRY RUN MODE ACTIVATED 🚧")
+		fmt.Printf("👉 Would have terminate backend of clients %s (excluding [%s])\n", alias, excludeRoles)
+		return
+	}
+
+	err := db.TerminateClientBackend(excludeRoleList)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to terminate backends: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✅ terminate backend of clients %s (excluding [%s])\n", alias, excludeRoles)
 }

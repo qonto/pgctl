@@ -54,6 +54,58 @@ target_db:
 	result.AssertStdoutContains(t, "Successfully copied sequences")
 }
 
+func TestCopySequencesSpecialCharacterNames(t *testing.T) {
+	ctx := context.Background()
+
+	sourceContainer := SetupPostgreSQLContainer(ctx, t)
+	defer sourceContainer.Cleanup(ctx, t)
+
+	targetContainer := SetupPostgreSQLContainer(ctx, t)
+	defer targetContainer.Cleanup(ctx, t)
+
+	sourceContainer.WaitForReadiness(ctx, t, 30*time.Second)
+	targetContainer.WaitForReadiness(ctx, t, 30*time.Second)
+
+	// Qonto pubsub sequences contain hyphens and dots and were created quoted, so
+	// they must always be referenced double-quoted. Without per-part identifier
+	// quoting, both CREATE SEQUENCE and setval fail with "syntax error at or near -".
+	sourceContainer.ExecuteSQL(ctx, t, `CREATE SEQUENCE "pubsub-addresses.status-update_offset_seq" START 100`)
+	sourceContainer.ExecuteSQL(ctx, t, `SELECT setval('"pubsub-addresses.status-update_offset_seq"', 999, true)`)
+
+	configContent := fmt.Sprintf(`
+source_db:
+  database: %s
+  host: %s
+  password: %s
+  port: %d
+  role: %s
+target_db:
+  database: %s
+  host: %s
+  password: %s
+  port: %d
+  role: %s
+`,
+		sourceContainer.Config.Database, sourceContainer.Config.Host, sourceContainer.Config.Password,
+		sourceContainer.Config.Port, sourceContainer.Config.User,
+		targetContainer.Config.Database, targetContainer.Config.Host, targetContainer.Config.Password,
+		targetContainer.Config.Port, targetContainer.Config.User)
+	CreateTempConfigWithContent(t, configContent)
+
+	executor := NewPgctlExecutor(t)
+	result := executor.Execute(ctx, t, "copy", "sequences", "--from", "source_db", "--to", "target_db", "--apply")
+
+	result.AssertSuccess(t)
+	result.AssertStdoutContains(t, "pubsub-addresses.status-update_offset_seq (last_value: 999)")
+	result.AssertStdoutContains(t, "Successfully copied sequences")
+
+	// Verify the sequence actually landed on the target with the right value.
+	executor = NewPgctlExecutor(t)
+	listResult := executor.Execute(ctx, t, "list", "sequences", "--on", "target_db")
+	listResult.AssertSuccess(t)
+	listResult.AssertStdoutContains(t, "pubsub-addresses.status-update_offset_seq (last_value: 999)")
+}
+
 func TestCopySequencesEmptySource(t *testing.T) {
 	ctx := context.Background()
 
@@ -412,12 +464,12 @@ target_db:
 func TestCopySchemaVersionMismatch(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup PostgreSQL 15 container for source
-	sourceContainer := SetupPostgreSQLContainerWithVersion(ctx, t, "postgres:15-alpine")
+	// Setup PostgreSQL 14 container for source
+	sourceContainer := SetupPostgreSQLContainerWithVersion(ctx, t, "postgres:14.22-alpine")
 	defer sourceContainer.Cleanup(ctx, t)
 
-	// Setup PostgreSQL 16 container for target (different major version)
-	targetContainer := SetupPostgreSQLContainerWithVersion(ctx, t, "postgres:16-alpine")
+	// Setup PostgreSQL 18 container for target (different major version)
+	targetContainer := SetupPostgreSQLContainerWithVersion(ctx, t, "postgres:18.4-alpine")
 	defer targetContainer.Cleanup(ctx, t)
 
 	sourceContainer.WaitForReadiness(ctx, t, 30*time.Second)

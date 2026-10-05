@@ -15,7 +15,6 @@ func createCmd() *cobra.Command {
 	}
 	createCmd.AddCommand(createPublicationCmd())
 	createCmd.AddCommand(createSubscriptionCmd())
-
 	return createCmd
 }
 

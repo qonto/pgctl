@@ -87,7 +87,7 @@ func (db *DB) UpdateExtensions(selectedDatabase string, extensions []string) err
 	defer conn.Close(context.Background()) //nolint: errcheck
 
 	for _, extension := range extensions {
-		updateSQL := fmt.Sprintf("ALTER EXTENSION %s UPDATE", extension)
+		updateSQL := fmt.Sprintf("ALTER EXTENSION %s UPDATE", pgx.Identifier{extension}.Sanitize())
 		_, err := conn.Exec(context.Background(), updateSQL)
 		if err != nil {
 			return fmt.Errorf("unable to run update of %s in %s : %w", extension, selectedDatabase, err)

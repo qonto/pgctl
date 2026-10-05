@@ -46,12 +46,31 @@ func (a *App) ListSubscriptions(alias string, listOnAllDatabases bool) {
 	}
 }
 
+func (a *App) CheckSubscriptionReady(alias string) (bool, error) {
+	db := a.getDatabaseFromAlias(alias)
+
+	subscriptionName := a.getSubscriptionName(alias)
+
+	unreadyDetected, err := db.GetExistenceOfNotReadySubscriptions(subscriptionName)
+	if err != nil {
+		return false, fmt.Errorf("❌ Unable to get subscription status: %w", err)
+	}
+
+	if !unreadyDetected {
+		fmt.Printf("✅ No unready subscriptions found for %s on %s\n", subscriptionName, alias)
+		return true, nil
+	}
+
+	fmt.Printf("❌ Subscription not ready for all tables in %s on %s\n", subscriptionName, alias)
+	return false, nil
+}
+
 func (a *App) CheckSubscriptionLag(alias string, subscriptionName string) (int64, error) {
 	db := a.getDatabaseFromAlias(alias)
 
 	lag, err := db.GetSubscriptionLag(subscriptionName)
 	if err != nil {
-		return 1, fmt.Errorf("❌ Unable to get subscription lag: %w\n", err)
+		return 1, fmt.Errorf("❌ Unable to get subscription lag: %w", err)
 	}
 
 	if lag == 0 {

@@ -20,6 +20,7 @@ func checkCmd() *cobra.Command {
 	checkCmd.AddCommand(checkSequenceCmd())
 	checkCmd.AddCommand(checkSubscriptionLagCmd())
 	checkCmd.AddCommand(checkRolesBetweenSourceAndTargetCmd())
+	checkCmd.AddCommand(checkSubscriptionReadyCmd())
 
 	return checkCmd
 }
@@ -212,4 +213,31 @@ func checkRolesBetweenSourceAndTargetCmd() *cobra.Command {
 	checkRolesBetweenSourceAndTargetCmd.MarkFlagRequired("to")   //nolint: errcheck,gosec
 
 	return checkRolesBetweenSourceAndTargetCmd
+}
+
+func checkSubscriptionReadyCmd() *cobra.Command {
+	var database string
+
+	checkSubscriptionReadyCmd := &cobra.Command{
+		Use:   "subscription-is-ready",
+		Short: "Check if subscription is ready",
+		Long:  "Check if subscription is ready, means validating if an initial copy is complete after relocation init command",
+		Run: func(cmd *cobra.Command, args []string) {
+			app, err := pgctl.New()
+			if err != nil {
+				fmt.Printf("err: %v\n", err)
+				os.Exit(1)
+			}
+			_, err = app.CheckSubscriptionReady(database)
+			if err != nil {
+				fmt.Printf("Unable to check subscription readiness: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	checkSubscriptionReadyCmd.Flags().StringVar(&database, "on", "", "selected alias")
+	checkSubscriptionReadyCmd.MarkFlagRequired("on") //nolint: errcheck,gosec
+
+	return checkSubscriptionReadyCmd
 }

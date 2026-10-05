@@ -1,0 +1,2 @@
+-- pgctl_bump 1.0 — empty on purpose; the extension exists only to expose
+-- a major-version upgrade path (1.0 -> 2.0) to pgctl integration tests.

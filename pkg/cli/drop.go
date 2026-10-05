@@ -15,11 +15,35 @@ func dropCmd() *cobra.Command {
 	}
 	dropCmd.AddCommand(dropPublicationCmd())
 	dropCmd.AddCommand(dropSubscriptionCmd())
+	dropCmd.AddCommand(dropClientsCmd())
 
 	dropCmd.PersistentFlags().StringVar(&database, "on", "", "selected alias")
 	dropCmd.MarkPersistentFlagRequired("on") //nolint: errcheck,gosec
 
 	return dropCmd
+}
+
+func dropClientsCmd() *cobra.Command {
+	var excludeRoles string
+	var apply bool
+
+	dropClientsCmd := &cobra.Command{
+		Use:   "clients",
+		Short: "Drop connections of client_backend by terminating them",
+		Run: func(cmd *cobra.Command, args []string) {
+			app, err := pgctl.New()
+			if err != nil {
+				fmt.Printf("err: %v\n", err)
+				os.Exit(1)
+			}
+
+			app.DropClients(database, excludeRoles, apply)
+		},
+	}
+
+	dropClientsCmd.PersistentFlags().StringVar(&excludeRoles, "exclude-roles", "", "comma separated list of roles to exclude from the operation")
+	dropClientsCmd.Flags().BoolVar(&apply, "apply", false, "if set, will apply the changes")
+	return dropClientsCmd
 }
 
 func dropPublicationCmd() *cobra.Command {

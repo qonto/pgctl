@@ -24,7 +24,6 @@ type DB struct {
 type queryDatname struct {
 	Datname string
 }
-
 type QueryTable struct {
 	Tablename string
 }
@@ -140,6 +139,33 @@ func (db *DB) GetTables() ([]QueryTable, error) {
 	tables, err := pgx.CollectRows(rows, pgx.RowToStructByName[QueryTable])
 	if err != nil {
 		return nil, fmt.Errorf("unable to extract tables names from SQL query: %w", err)
+	}
+
+	return tables, nil
+}
+
+func (db *DB) GetUnloggedTables() ([]string, error) {
+	conn, err := pgx.Connect(context.Background(), db.getConnString(db.Database))
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to database: %w", err)
+	}
+	defer conn.Close(context.Background()) //nolint: errcheck
+
+	rows, err := conn.Query(context.Background(), `
+		SELECT c.relname
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relpersistence = 'u'
+		AND c.relkind = 'r'
+		AND n.nspname NOT IN ('pg_catalog', 'information_schema')`)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list unlogged tables: %w", err)
+	}
+	defer rows.Close()
+
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract unlogged table names: %w", err)
 	}
 
 	return tables, nil
@@ -534,9 +560,10 @@ func (db *DB) CheckPgDumpCompatibility() error {
 		return fmt.Errorf("unable to get target database version: %w", err)
 	}
 
+	fmt.Printf("pgDumpVersion: %d.%d, targetVersion: %d.%d\n", pgDumpVersion.Major, pgDumpVersion.Minor, targetVersion.Major, targetVersion.Minor)
 	// Check if major versions match
 	if pgDumpVersion.Major != targetVersion.Major {
-		return fmt.Errorf("pg_dump --version returned (%d.%d) which major version is not equal to major version of the target PostgreSQL database (%d.%d). This can cause compatibility issues when copying the schema. Make sure to use the same major pg_dump version as your target.",
+		return fmt.Errorf("pg_dump --version returned (%d.%d) which major version is not equal to major version of the target PostgreSQL database (%d.%d). This can cause compatibility issues when copying the schema. Make sure to use the same major pg_dump version as your target",
 			pgDumpVersion.Major, pgDumpVersion.Minor, targetVersion.Major, targetVersion.Minor)
 	}
 
@@ -608,4 +635,35 @@ func (db *DB) ListRoles() ([]string, error) {
 	}
 
 	return roles, nil
+}
+
+// TerminateClientBackend use pg_terminate_backend on current database for client backends with an option filter
+func (db *DB) TerminateClientBackend(excludeRoles []string) error {
+	conn, err := pgx.Connect(context.Background(), db.getConnString(db.Database))
+	if err != nil {
+		return fmt.Errorf("unable to connect to database: %w", err)
+	}
+	defer conn.Close(context.Background()) //nolint: errcheck
+
+	var query string
+	if len(excludeRoles) > 0 {
+		query = `SELECT pg_terminate_backend(pid)
+        FROM (SELECT pid FROM pg_stat_activity
+        WHERE pid <> pg_backend_pid()
+          AND datname = current_database()
+          AND backend_type = 'client backend'
+          AND usename <> ALL($1::text[])) t`
+		_, err = conn.Exec(context.Background(), query, excludeRoles)
+	} else {
+		query = `SELECT pg_terminate_backend(pid)
+        FROM (SELECT pid FROM pg_stat_activity
+        WHERE pid <> pg_backend_pid()
+          AND datname = current_database()
+          AND backend_type = 'client backend') t`
+		_, err = conn.Exec(context.Background(), query)
+	}
+	if err != nil {
+		return fmt.Errorf("unable to terminate backends: %w", err)
+	}
+	return nil
 }

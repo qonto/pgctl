@@ -109,3 +109,20 @@ func (db *DB) GetSubscriptionLag(subscriptionName string) (int64, error) {
 
 	return lag, nil
 }
+
+func (db *DB) GetExistenceOfNotReadySubscriptions(subscriptionName string) (bool, error) {
+	conn, err := pgx.Connect(context.Background(), db.getConnString(db.Database))
+	if err != nil {
+		return true, fmt.Errorf("unable to connect to database: %w", err)
+	}
+	defer conn.Close(context.Background()) //nolint: errcheck
+
+	var notReadySubPresent bool
+	err = conn.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT 1 FROM pg_subscription_rel WHERE srsubstate <> 'r') as status`).Scan(&notReadySubPresent)
+	if err != nil {
+		return true, fmt.Errorf("unable to get pg_subscription_rel subscription status: %w", err)
+	}
+
+	return notReadySubPresent, nil
+}

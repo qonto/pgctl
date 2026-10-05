@@ -85,17 +85,18 @@ func (db *DB) CopySequences(targetDB DB) error {
 
 	for _, sourceSequence := range sourceSequences {
 		sequenceFullName := fmt.Sprintf("%s.%s", sourceSequence.SchemaName, sourceSequence.SequenceName)
+		sequenceIdentifier := pgx.Identifier{sourceSequence.SchemaName, sourceSequence.SequenceName}.Sanitize()
 		fmt.Printf("| Copying sequence %s (last_value: %d) to %s database %s\n",
 			sequenceFullName, sourceSequence.LastValue, targetDB.Host, targetDB.Database)
 
 		_, err = tx.Exec(context.Background(),
-			fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s ", sequenceFullName))
+			fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s", sequenceIdentifier))
 		if err != nil {
 			return fmt.Errorf("unable to create sequence %s: %w", sequenceFullName, err)
 		}
 
 		_, err = tx.Exec(context.Background(),
-			fmt.Sprintf("SELECT setval('%s', %d)", sequenceFullName, sourceSequence.LastValue))
+			"SELECT setval($1::regclass, $2)", sequenceIdentifier, sourceSequence.LastValue)
 		if err != nil {
 			return fmt.Errorf("unable to copy sequence %s: %w", sequenceFullName, err)
 		}

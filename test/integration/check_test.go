@@ -777,3 +777,54 @@ target_db_instance:
 		result.AssertStdoutContains(t, "missing_source_role")
 	})
 }
+
+// TestCheckSubscriptionLag tests the check subscription-is-ready command functionality
+func TestCheckSubscriptionReady(t *testing.T) {
+	ctx := context.Background()
+
+	// Setup publisher and subscriber containers
+	publisher, subscriber := SetupPublisherSubscriberContainers(ctx, t)
+	defer publisher.Cleanup(ctx, t)
+	defer subscriber.Cleanup(ctx, t)
+
+	// Create temporary configuration file for both containers
+	CreateTempPgctlConfigForPublisherSubscriber(t, publisher, subscriber)
+
+	// Wait for containers to be ready
+	publisher.WaitForReadiness(ctx, t, 30*time.Second)
+	subscriber.WaitForReadiness(ctx, t, 30*time.Second)
+
+	executor := NewPgctlExecutor(t)
+	// Create test table and publication in publisher
+	publisher.ExecuteSQL(ctx, t, `
+		CREATE TABLE test_users (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			email VARCHAR(100) UNIQUE NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	err := publisher.ExecuteSQLWithTimeout(ctx, t, 10*time.Second, "CREATE PUBLICATION test_pub FOR TABLE test_users")
+	require.NoError(t, err, "Failed to publish table")
+
+	t.Run("subscription_readiness", func(t *testing.T) {
+		// Grant replication privileges to both users
+		publisher.ExecuteSQL(ctx, t, "ALTER ROLE publisher_user REPLICATION")
+		subscriber.ExecuteSQL(ctx, t, "ALTER ROLE subscriber_user REPLICATION")
+
+		subscriptionSQL := fmt.Sprintf(`
+			CREATE SUBSCRIPTION sub_subscriber_db
+			CONNECTION 'postgres://%s:%s@publisher:5432/publisher_db'
+			PUBLICATION pub_publisher_db
+			WITH (connect = true, create_slot = true)
+		`, publisher.Config.User, publisher.Config.Password)
+		err = subscriber.ExecuteSQLWithTimeout(ctx, t, 10*time.Second, subscriptionSQL)
+		require.NoError(t, err, "Failed to create subscription")
+
+		time.Sleep(1 * time.Second) // guarantees initial copy done
+
+		result := executor.Execute(ctx, t, "check", "subscription-is-ready", "--on", "publisher")
+		// Should work
+		result.AssertSuccess(t)
+	})
+}

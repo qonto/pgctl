@@ -1,0 +1,1 @@
+-- pgctl_bump 2.0 — empty on purpose (see 1.0 script for context).

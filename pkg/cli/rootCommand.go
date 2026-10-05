@@ -26,6 +26,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(createCmd())
 	rootCmd.AddCommand(dropCmd())
 	rootCmd.AddCommand(checkCmd())
+	rootCmd.AddCommand(grantCmd())
+	rootCmd.AddCommand(revokeCmd())
 	rootCmd.AddCommand(versionCmd())
 
 	return rootCmd

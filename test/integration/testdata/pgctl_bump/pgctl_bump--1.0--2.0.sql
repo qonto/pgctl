@@ -1,0 +1,1 @@
+-- pgctl_bump 1.0 -> 2.0 upgrade — empty on purpose (see 1.0 script for context).

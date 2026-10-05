@@ -3,16 +3,15 @@
 set -e
 set -u
 
-# CREDITS TO https://github.com/mrts/docker-postgresql-multiple-databases
+# Credits to https://github.com/mrts/docker-postgresql-multiple-databases
 
 function create_user_and_database() {
 	local database=$1
 	echo "  Creating user and database '$database'"
 	psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
-	    CREATE USER $database;
+	    CREATE USER $database PASSWORD 'hackme';
 	    CREATE DATABASE $database;
 	    GRANT ALL PRIVILEGES ON DATABASE $database TO $database;
-		CREATE EXTENSION IF NOT EXISTS adminpack WITH VERSION '1.1';
 		CREATE EXTENSION IF NOT EXISTS pg_trgm WITH VERSION '1.5';
 EOSQL
 }

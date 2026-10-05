@@ -1,3 +1,28 @@
+# v2.7.0
+
+- `pgctl check subscription-is-ready --on alias`: now ensures no tables is not fully copied over during relocation process.
+
+# v2.6.0
+
+- `pgctl init relocation`: automatically exclude known-safe unlogged tables from replication publications. Fails with error if an unknown unlogged table is found.
+
+# v2.5.2
+
+- `pgctl copy sequences`: Quote sequence identifiers so names with hyphens/dots (e.g. `pubsub-addresses.status-update_offset_seq`) copy without a syntax error.
+
+# v2.5.1
+
+- Wait for subscription lag to reach zero checks each `500ms` instead of each `15s` during `run relocation`.
+
+# v2.5.0
+
+- Add `pgctl drop clients`
+
+# v2.4.0
+
+- Add `pgctl grant connect`
+- Add `pgctl revoke connect`
+
 # v2.3.3
 
 - Revert bug introduced in `v2.3.2`: pg_dump should be the same as target
